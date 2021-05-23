@@ -1,0 +1,30 @@
+# Contains settings specific to the production environment
+version: "3"
+
+services:
+  nginx:
+    ports:
+      - "80:80"
+  
+  hello:
+    build:
+      context: .
+      args:
+        NODE_ENV: production
+    environment:
+      # Use environment variables you set on the host machine for configuration values
+      # Set environment variable on host with: export MY_VAR="value"
+      # View environment variables set on host with: printenv
+      # To set all environment variables on the host at startup, copy a .env to root folder on the host with your variables
+      # In root folder, open .profile and add to bottom: set -o allexport; source /root/.env; set +o allexport
+      # Settings will be applied when you create a new terminal session.
+      - NODE_ENV=production
+      - MONGO_USER=${MONGO_USER}
+      - MONGO_PASSWORD=${MONGO_PASSWORD}
+      - SESSION_SECRET=${SESSION_SECRET}
+    command: node app.js
+  
+  mongo:
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USER}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}

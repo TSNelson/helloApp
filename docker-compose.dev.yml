@@ -1,0 +1,30 @@
+# Contains settings specific to the development environment
+version: "3"
+
+services:
+  nginx:
+    ports:
+      - "3000:80"
+    volumes:
+      # read only bind mount for nginx configuration
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+  hello:
+    build:
+      context: .
+      args:
+        NODE_ENV: development
+    volumes:
+      - ./:/app:ro
+      - /app/node_modules
+    environment:
+      # Access environment variables in the container through process.env, e.g. process.env.MONGO_USER
+      - NODE_ENV=development
+      - MONGO_USER=root
+      - MONGO_PASSWORD=example
+      - SESSION_SECRET=passphrase
+    command: npm run dev
+  
+  mongo:
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=example

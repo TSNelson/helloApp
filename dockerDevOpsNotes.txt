@@ -1,0 +1,117 @@
+// Building and running a container
+
+Create a Dockerfile that give instructions for creating the docker image
+
+Create a .dockerignore file that tells the image what files to ignore in your app directory
+
+At a command line, run from the app directory:
+> docker build -t <tag> .
+
+This will build an image from the Dockerfile in the current directory and give it the given 
+
+Run a container with the image using the command:
+> docker run -d -p <host port>:<container port> --name <container name> <tag>
+
+e.g. docker run -d -p 3000:3000 --name my-app my-app-image
+
+The -p flag maps ports from the host to the container
+
+View logs for a container with: docker logs container-name
+
+// Synchronizing files with volumes
+
+Using a type of volume in docker called a bind mount, you can instruct a folder in a container to synchronize to a folder on the host machine. This feature allows you to develop your code in a folder on the local machine, and have those changes reflected in the running container
+
+> docker run -d -p <host port>:<container port> -v <path to folder on host>:<path to folder in container> --name <container name> <tag>
+
+e.g. docker run -d -p 3000:3000 -v C:\Code\myapp:/app --name my-app my-app-image
+
+// Protecting a volume from changes and volume specificity
+
+With the folders synced, all changes to the local directory affect the container volume, but you don't necessarily want every change to sync. For example, you don't need a node_modules directory in the local directory, but you do want one in the container's app directory. You can fix that by specifying an anonymous volume for the node_modules folder. That path is more specific, so it will take precedence over the bind mount, and changes to node_modules in the local folder won't sync to the container
+
+> docker run -d -p <host port>:<container port> -v <path to folder on host>:<path to folder in container> -v <path to node_modules in container> --name <container name> <tag>
+e.g. docker run -d -p 3000:3000 -v C:\Code\myapp:/app -v /app/node_modules --name my-app my-app-image
+
+// Making a volume read only
+
+The bind mount is two way, which means that changes to the app folder on the container also change files on the local computer. However, you don't necessarily want changes to the container to change the local files -- this could be a security issue. To address that issue, you can make the synchronization one way, and give the container read only access to the files. Use the read only flag, :ro, in the volume bind mount on the container path.
+
+> docker run -d -p <host port>:<container port> -v <path to folder on host>:<path to folder in container>:ro -v <path to node_modules in container> --name <container name> <tag>
+e.g. docker run -d -p 3000:3000 -v C:\Code\myapp:/app:ro -v /app/node_modules --name my-app my-app-image
+
+Note: adding the read only flag caused an error that mysteriously went away after several restarts, rebuild, and trying adding the bind volume with the --mount command instead.
+The read only access might create a problem if you want the container to write files, but you shouldn't have any problem writing to another folder in the container.
+
+Every time you create a new container, another anonymous volume is created. These volumes will accumulate if not managed.
+docker volume ls -- list volumes
+docker volume rm volume-name -- remove a volume
+docker volume prune -- remove unnecessary volumes
+
+If you want to delete all of the volumes associates with a container when you stop it, add the -v flag
+docker rm container-name -fv
+
+// Using Docker Compose
+The commands for running containers at the command line work, but they get really long. This becomes unworkable, especially as your environment grows to multiple containers for different components of your application. Docker compose allows you to specify everything that needs to be done, and run it with a simple command.
+
+// Adding in environment variables
+Add environment variables in the Dockerfile or when running the container at the command line. Environment variables added in at the command line will overwrite values specified in the Dockerfile. To view the environment variables from within the container, run printenv at a command prompt
+
+docker run -d -p <host port>:<container port> --env <variable>=<value> -v <path to folder on host>:<path to folder in container>:ro -v <path to node_modules in container> --name <container name> <tag>
+
+e.g. docker run -d -p 3000:3080 --env PORT=3080 -v C:\Code\myapp:/app:ro -v /app/node_modules --name my-app my-app-image
+
+You can use --env more than once to add additional variables, but to manage variables it's usually easier to have a file that contains your environment variables, usually .env. You have to be careful about where that file will be saved. You might want to add it to .gitignore, for example.
+
+docker run -d -p <host port>:<container port> --env-file <path to file> -v <path to folder on host>:<path to folder in container>:ro -v <path to node_modules in container> --name <container name> <tag>
+
+e.g. docker run -d -p 3000:3080 --env-file C:\Code\myapp\.env -v C:\Code\myapp:/app:ro -v /app/node_modules --name my-app my-app-image
+
+// Using Docker Compose
+
+To facilitate working with multiple containers, and to specify your infrastructure as code, you can use Docker Compose to detail the configuration of multiple containers, and then launch them all with a single command. Another advantage of using docker compose is that the containers are all launched in a separate network by default, and your containers can talk to each other using docker DNS, without having to configure the networking features.
+
+docker compose up -d     -- starts all containers in a docker-compose.yml file, -d for detached mode
+docker compose down -v   -- stop all containers in a docker-compose.yml file, -v removes unneeded volumes
+
+Docker compose looks to see if the image it would build already exists (by the name it would give it), and will use the existing image if one is found. It does not know if you have made changes to your build. If the images are stale, you have to tell it to rebuild the images.
+
+docker compose up -d --build    -- starts all containers, and build a new version of all of the images in the process
+
+To apply changes that you have made to your docker compose file, you don't necessarily have to run docker-compose down. If you run docker-compose up, and some of the services are already running and unchanged, they will be skipped. However, anonymous volumes will remain the same, and that might not always work. For example, if you update your node dependencies, and node_modules changes, the anonymous volume containing your node_modules has to be renewed. In that situation, you need to run docker compose down and then up, or you can use docker compose up with the -V flag to renew anonymous volumes
+
+
+// Setting up different dev and production environments
+
+One option is to create more than one different Dockerfile and/or more than one docker-compose file.
+Create a docker compose files for dev, prod, and shared settings. Then launch docker compose with multiple docker compose files. Order matters. List the file with settings that should take precedence last.
+
+For example, to work with the dev environment:
+To start up dev environment, run: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+To shut down dev environment, run: docker-compose -f docker-compose.yml -f docker-compose.dev.yml down [-v]
+  -- note that the optional -v flag will remove associated volumes, but that might include a database you want to persist
+  -- to clean up volumes, run docker volume prune while all of your containers are running; any volumes not used by any containers will be removed
+
+For the production build, there is no bind mount, so you have to rebuild the image to include any updates
+To build and start up prod environment, run: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+In order to install node modules that are only for production in production environments, you need to change the build,
+so if you are using just one Dockerfile for both production and development, the Dockerfile contains a run command that is a short script that changes the build depending on the value of a NODE_ENV argument you pass in from the docker compose file that indicates development or production, and changes the npm install command accordingly. The changes the build to include development dependencies or not.
+
+
+Basic Project Commands:
+launch dev mode: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+prune volumes after launch: docker volume prune
+shut down dev mode: docker-compose -f docker-compose.yml -f docker-compose.dev.yml down
+launch in prod after changes, updating build: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+watch logs for a container: docker container logs <container name> --follow
+
+Cleaning Things Up:
+prune commands allow you to clean up images, volumes, build cache, and containers; e.g. docker image prune
+docker system prune          -- cleans up everything except images
+docker system prune -a       -- cleans up everything
+docker image prune -a        -- removes all images you are not using
+docker systm df              -- see space usage
+
+See the course here: https://www.youtube.com/watch?v=jotpVtFwYBk
+The last 1-1.5 hours covers the workflow for pushing your app to production by building container images and pushing them to docker hub using docker compose commands, as well as implementing docker swarm for basic container orchestration, including scaling services and rolling updates.

@@ -1,0 +1,28 @@
+# Contains settings common to development and production environments
+version: "3"
+
+services:
+  nginx:
+    image: nginx:stable-alpine
+  
+  hello:
+    build: .
+    environment:
+      - PORT=3000
+    depends_on:
+      - mongo
+      # instructs docker on dependencies between services; hello depends on mongo, so mongo will be started before hello
+  
+  mongo:
+    image: mongo
+    volumes:
+      - mongo-db:/data/db
+      # named volume declaration -- name:path
+      # this is the database data that you want to persist
+      # the name also has to be declared in the volumes section (see below)
+
+  redis:
+    image: redis
+
+volumes:
+  mongo-db:
